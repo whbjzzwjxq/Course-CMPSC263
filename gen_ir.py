@@ -127,6 +127,8 @@ def main():
         os.system(exec_cmd)
         remove_annotations(output_path)
 
+        os.remove(ir_temp_path)
+
     output_name = output_path.replace(".ll", "")
     exec_cmd, json_path = gen_json(output_name)
 
