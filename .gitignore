@@ -31,4 +31,8 @@
 *.out
 *.app
 
+# Mac FS
 .DS_Store
+
+# Output
+outputs

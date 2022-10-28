@@ -4,10 +4,11 @@ A LLVM Pass to extract llvm ir from llvm to json, using old pass manager of LLVM
 # Build
 Assume the llvm-project locates ./llvm-project
 ```bash
-cp -r {this-folder} ./llvm-project/llvm/lib/Transforms/IRExtractor
-echo add_subdirectory(IRExtractor) >> ./llvm-project/llvm/lib/Transforms/CMakeLists.txt
-cd ./llvm-project/build
-cmake --build .
+/* Build llvm first! */
+cd ./llvm-project
+cp -r {this-folder} ./llvm/lib/Transforms/IRExtractor
+echo "add_subdirectory(IRExtractor)" >> ./llvm/lib/Transforms/CMakeLists.txt
+cmake --build build/
 ```
 
 # Usage
@@ -31,4 +32,5 @@ cmake -S llvm -B build -G Ninja \
 -DLLVM_PARALLEL_LINK_JOBS=1 \
 -DLLVM_OPTIMIZED_TABLEGEN=ON \
 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build/
 ```
