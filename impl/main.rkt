@@ -13,7 +13,7 @@
 
 (define filename
   (command-line
-    #:program "serval-llvm"
+    #:program "llvm-optimizer"
     #:once-each
     [("+d" "++debug") "debug mode" (debug-mode #t)]
     [("++print-program") "print the whole program" (print-program #t)]
@@ -27,8 +27,6 @@
 
 (define program (module-function-hv m))
 (define global-hv (module-global-hv m))
-(define init-state (mstate-init global-hv))
-(define trsc (transaction null null 0 null null null null))
 
 (when (print-program)
   (pretty-display program)
@@ -36,6 +34,6 @@
 
 (debug-display global-hv)
 
-(define result (interpret program init-state trsc))
+(define result (interpret program init-state))
 (debug-display result)
 (exit result)

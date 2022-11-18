@@ -136,8 +136,6 @@
     ["I32" i32]
     ["I64" i64]
     ["I128" i128]
-    ["I256" i256]
-    ["I512" i512]
     ["Label" llvm-label]
     ["Struct" llvm-struct]
     ["Function" llvm-function]

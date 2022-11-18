@@ -10,34 +10,6 @@
 
 (provide (all-defined-out))
 
-(struct
-  mstate (vars frames mregions)
-  #:mutable
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) "mstate")
-      (lambda (obj) (list
-        (mstate-vars obj)
-        (mstate-mregions obj)
-      ))
-    ))
-  ]
-)
-
-(define (mstate-init global-hv [frames (list)] [mregions (mregions-init)])
-  (mstate global-hv frames mregions)
-)
-
-(define (mstate-copy _mstate)
-  (begin
-    (mstate
-      (hash-vector-copy (mstate-vars _mstate))
-      (list)
-      (mregions-init)
-    )
-  )
-)
 
 (struct
   frame (vars func-name allocas ret-value)
@@ -79,23 +51,12 @@
   )
 )
 
-(define (interpret program init-state transaction)
+(define (interpret program init-state)
   (define global-state (mstate-copy init-state))
   (define global-var-hv (mstate-vars global-state))
-  (define cur-frames (mstate-frames global-state))
-  (define cur-mregions (mstate-mregions global-state))
-  (define cur-transaction transaction)
   (define (gvar-read var-name) (hash-vector-ref global-var-hv var-name))
   (define (gvar-write! var-name v) (hash-vector-set! global-var-hv var-name v))
   (define (add-frame _frame) (set-mstate-frames! global-state (cons _frame cur-frames)))
-
-  (define (store-by-ptr ptr value type)
-    (define mblock (pointer-block cur-mregions ptr))
-    (define offset (pointer-offset ptr))
-    (define size (core:bvpointer (/ (bitvector-size type) 8)))
-    (define path (core:mblock-path mblock offset size))
-    (core:mblock-istore! mblock value path)
-  )
 
   (define (internal-func? func-name)
     (and
