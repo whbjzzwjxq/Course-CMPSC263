@@ -13,60 +13,6 @@
 
 (provide (all-defined-out))
 
-(struct func (name bbs args)
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (~a "Func: " (func-name obj) " args: " (func-args obj)))
-      (lambda (obj) (list
-        (func-bbs obj)
-      ))
-    ))
-  ]
-)
-
-; `bb` means `basic block`.
-(struct bb (name insts)
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (~a "Basicblock: " (bb-name obj)))
-      (lambda (obj) (bb-insts obj))
-    ))
-  ]
-)
-
-
-
-(struct inst (assign assign-type op args predicate alloca)
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj)
-        (~a "Inst: %"
-          (inst-assign obj) " = " (inst-op obj) " " (inst-assign-type obj) (inst-args obj)
-        )
-      )
-      (lambda (obj) "")
-    ))
-  ]
-)
-
-
-(struct operand (var-name [type #:mutable] [value #:mutable] [pred-block #:mutable])
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) 'operand)
-      (lambda (obj) (list
-        (operand-var-name obj)
-        (operand-type obj)
-        (operand-value obj)
-      ))
-    ))
-  ]
-)
-
 (define (opd-int? operand)
   (&&
     (llvm-integer? (operand-type operand))
@@ -109,25 +55,6 @@
   (llvm-pointer? (operand-type operand))
 )
 
-
-;; list jsexpr
-(define (load-json-lines file)
-  (define f (open-input-file file #:mode 'text))
-  (define lines '())
-  (begin
-    (while #t
-      (define line (read-line f))
-      (if (eof-object? line)
-        (break)
-        (set! lines (cons (string->jsexpr line) lines))
-      )
-    )
-    (close-input-port f)
-    ; Watch-out the order of cons.
-    (reverse lines)
-  )
-)
-
 (define (str2datatype type-str)
   (match type-str
     ["I1" i1]
@@ -139,7 +66,7 @@
     ["Label" llvm-label]
     ["Struct" llvm-struct]
     ["Function" llvm-function]
-    ["Void" void]
+    ["Void" llvm-void]
 
     [(regexp #rx"Pointer-.*") (let*
       (
@@ -155,7 +82,7 @@
         [num-str (first res)]
         [new-type-str1 (string-trim new-type-str (format "~a-" num-str) #:right? #f)]
       )
-      (array-type-init (str2datatype new-type-str1) (string->number num-str))
+      (array-type-init (string->number num-str) (str2datatype new-type-str1))
     )]
     [else (error "Unknown type: " type-str)]
   )
@@ -166,8 +93,8 @@
   (define type-str (hash-ref opd-jsexpr `type))
   (define value-str (hash-ref opd-jsexpr `value))
   (define pred-block (hash-ref opd-jsexpr `pred_block null))
-  (define _datatype (str2datatype type-str))
-  (define _value (if (non-empty-string? var-name) value-str (string->number value-str)))
+  (define datatype (str2datatype type-str))
+  (define value (if (non-empty-string? var-name) value-str (string->number value-str)))
   (operand var-name _datatype _value pred-block)
 )
 
@@ -232,6 +159,24 @@
 )
 
 
-(define (load-program example-file-path)
-  (resolve-program (load-json-lines example-file-path))
+; list jsexpr
+(define (load-json-lines file)
+  (define f (open-input-file file #:mode 'text))
+  (define lines '())
+  (begin
+    (while #t
+      (define line (read-line f))
+      (if (eof-object? line)
+        (break)
+        (set! lines (cons (string->jsexpr line) lines))
+      )
+    )
+    (close-input-port f)
+    ; Watch-out the order of cons.
+    (reverse lines)
+  )
+)
+
+(define (load-program input-file-path)
+  (resolve-program (load-json-lines input-file-path))
 )

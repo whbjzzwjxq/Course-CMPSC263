@@ -1,4 +1,4 @@
-#lang rosette
+#lang racket
 
 (require
   racket/struct

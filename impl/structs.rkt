@@ -9,6 +9,14 @@
 
 (provide (all-defined-out))
 
+(define (print-type type)
+  (if (bitvector? type) (~a "i" (bitvector-size type)) type)
+)
+
+(define (print-opd opd)
+  (~a (if (bv? opd) (bitvector->integer opd) opd))
+)
+
 ; LLVM
 (struct module (global-hv function-hv) #:transparent)
 
@@ -32,14 +40,6 @@
       (lambda (obj) (basic-block-instructions obj))
     ))
   ]
-)
-
-(define (print-type type)
-  (if (bitvector? type) (~a "i" (bitvector-size type)) type)
-)
-
-(define (print-opd opd)
-  (~a (if (bv? opd) (bitvector->integer opd) opd))
 )
 
 (struct instruction value (opcode operands attributes) #:transparent

@@ -26,7 +26,7 @@ def gen_llvm_ir(target: str, cfile_path: str, output_path: str, opt_level: int, 
         # '-fno-discard-value-names',
         f'--target={target}',
         cflags,
-        f'> /dev/null',
+        f'1> /dev/null',
         f'2>&1',
     ]
     param_str = ' '.join(params)
@@ -52,7 +52,7 @@ def gen_mem2reg_ir(input_path: str, output_path: str):
         '-instnamer',
         f'-o {output_path}',
         f'{input_path}',
-        f'> /dev/null',
+        f'1> /dev/null',
         f'2>&1',
     ]
     param_str = ' '.join(params)
@@ -78,7 +78,7 @@ def gen_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", help="input file", required=True)
     parser.add_argument(
-        "-o", "--output", help="output file", default="outputs/output.ll")
+        "-o", "--output", help="output file", default="output.ll")
     parser.add_argument(
         "-d", "--debug", help="enable debug", action='store_true')
     parser.add_argument("-J", "--json", help="only generates json",

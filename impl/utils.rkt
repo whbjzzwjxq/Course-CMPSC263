@@ -10,6 +10,9 @@
 (define MAXVAR 256)
 (define MAXPHILENGTH 8)
 
+(define MAXI32 (sub1 2e31))
+(define MINI32 (- 2e31))
+
 
 (define (zip a b) (map cons a b))
 
@@ -22,3 +25,5 @@
 (define (reg-init) (bv 0 BITWIDTH))
 
 (define (pointer-init) (bv 0 POINTERWIDTH))
+
+(define default-bitvector (bitvector BITWIDTH))

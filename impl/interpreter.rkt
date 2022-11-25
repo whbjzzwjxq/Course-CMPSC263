@@ -1,11 +1,10 @@
-#lang rosette
+#lang rosette/safe
 
 (require
   racket/struct
   "utils.rkt"
   "hash-vector.rkt"
   "structs.rkt"
-  "parser.rkt"
 )
 
 (provide (all-defined-out))
@@ -37,20 +36,6 @@
   )
 )
 
-(define default-bitvector (bitvector (target-pointer-bitwidth)))
-
-(define (nullptrtoint)
-  (bv 0 default-bitvector)
-)
-
-(define (count-offset offset)
-  (cond
-    [(struct-offset? offset) (count-struct-offset (struct-offset-value offset))]
-    [(array-offset? offset) (count-array-offset (array-offset-index offset) (array-offset-size offset))]
-    [else (raise-user-error "unknown offset type ~a" offset)]
-  )
-)
-
 (define (interpret program init-state)
   (define global-state (mstate-copy init-state))
   (define global-var-hv (mstate-vars global-state))
@@ -66,25 +51,6 @@
   )
 
   (define (interpret-ext-func func-name operands)
-    ; Implementation of Ethereum Environment Interface (EEI).
-    (define (getCallValue)
-      (define a (list-ref operands 0))
-      (define value (transaction-value cur-transaction))
-      (define bv-type (bitvector 128))
-      (store-by-ptr a (integer->bitvector value bv-type) bv-type)
-    )
-
-    (define (getCodeSize)
-      (bv 65536 (bitvector (target-bitwidth)))
-    )
-
-    (define (revert)
-      void
-    )
-
-    (define (codeCopy)
-      void
-    )
 
     (define (llvm.wasm.memory.size.i32)
       (bv 0 (bitvector (target-bitwidth)))
@@ -95,13 +61,9 @@
     )
 
     (match func-name
-      ["getCallValue" (getCallValue)]
-      ["revert" (revert)]
-      ["getCodeSize" (getCodeSize)]
-      ["codeCopy" (codeCopy)]
       ["llvm.wasm.memory.size.i32" (llvm.wasm.memory.size.i32)]
       ["llvm.assume" (llvm.assume)]
-      [else (raise-user-error "unknown function name: " func-name)]
+      [else (raise-user-error "Unknown function name: " func-name)]
     )
   )
 
@@ -407,7 +369,7 @@
 
   (define ret (interpret-func "main" '()))
   (if (equal? ret void)
-    (debug-display "Program finished.")
+    (debug-display "Program returns void.")
     (bitvector->integer ret)
   )
 )

@@ -3,25 +3,21 @@
 (require
   racket/struct
   "utils.rkt"
-)
+  )
 
 (provide (all-defined-out))
 
-(define max32 (expt 2 31))
-(define max-i32 (sub1 max32))
-(define min-i32 (- max32))
-
-(struct datatype (name)
+(struct datatype (name size)
   #:methods gen:custom-write
   [(define write-proc
-    (make-constructor-style-printer
+     (make-constructor-style-printer
       (lambda (obj) (datatype-name obj))
       (lambda (obj) "")
-    ))
-  ]
-)
+      ))
+   ]
+  )
 
-(struct llvm-integer datatype (width))
+(struct llvm-integer datatype ())
 
 (define i1 (llvm-integer "i1" 1))
 (define i8 (llvm-integer "i8" 8))
@@ -30,45 +26,35 @@
 (define i64 (llvm-integer "i64" 64))
 (define i128 (llvm-integer "i128" 128))
 
-(define u128 (llvm-integer "u128" 128))
+(define llvm-label (datatype "label" 0))
+(define llvm-struct (datatype "struct" 0))
+(define llvm-function (datatype "function" 0))
+(define llvm-void (datatype "void" 0))
 
-(define s32 (llvm-integer "s32" 32))
-
-
-(define llvm-label (datatype "label"))
-(define llvm-struct (datatype "struct"))
-(define llvm-function (datatype "function"))
-
-(struct llvm-array datatype (size item-type)
+(struct llvm-array datatype (dim element-type)
   #:methods gen:custom-write
   [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (format "array [~a x ~a]" (llvm-array-size obj) (llvm-array-item-type obj)))
+     (make-constructor-style-printer
+      (lambda (obj) (format "array [~a x ~a]" (llvm-array-dim obj) (llvm-array-element-type obj)))
       (lambda (obj) "")
-    ))
-  ]
-)
+      ))
+   ]
+  )
 
-(define (array-type-init size item-type)
-  (llvm-array "array" size item-type)
-)
+(define (array-type-init dim element-type)
+  (llvm-array "array" (* dim (datatype-size element-type)) dim element-type)
+  )
 
-(struct llvm-pointer datatype (item-type)
+(struct llvm-pointer datatype (element-type)
   #:methods gen:custom-write
   [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (format "~a*" (llvm-pointer-item-type obj)))
+     (make-constructor-style-printer
+      (lambda (obj) (format "~a*" (llvm-pointer-element-type obj)))
       (lambda (obj) "")
-    ))
-  ]
-)
+      ))
+   ]
+  )
 
-(define (pointer-type-init item-type)
-  (llvm-pointer "pointer" item-type)
-)
-
-(define (s32-init) (
-  begin
-  (define-symbolic* x (bitvector BITWIDTH))
-  x
-))
+(define (pointer-type-init element-type)
+  (llvm-pointer "pointer" POINTERWIDTH element-type)
+  )
