@@ -59,4 +59,4 @@
 
 (define (pointer-type-init element-type)
   (llvm-pointer "pointer" POINTERWIDTH element-type)
-  )
+)

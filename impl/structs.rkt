@@ -68,7 +68,7 @@
   ]
 )
 
-(struct operand value (constant global)
+(struct operand value (constant global symbolic)
   #:transparent
   #:methods gen:custom-write
   [(define write-proc
@@ -97,5 +97,12 @@
   (&&
     (operand? v)
     (operand-global v)
+  )
+)
+
+(define (symbolic-operand? v)
+  (&&
+    (operand? v)
+    (operand-symbolic v)
   )
 )

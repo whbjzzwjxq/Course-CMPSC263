@@ -12,15 +12,11 @@
   (define func-hash (program-function-hash program))
   (define main-func (zhash-ref func-hash "main"))
 
-  (define ret (interpret-func main-func (list)))
+  (define ret (interpret-func func-hash main-func (list)))
   (if (equal? ret void)
     (debug-display "Program returns void.")
     (bitvector->integer ret)
   )
-)
-
-(define (internal-func? func-hash func-name)
-  (zhash-has-key? func-hash func-name)
 )
 
 (define (interpret-intrisinc-func func-name operands)
@@ -32,7 +28,7 @@
   )
 )
 
-(define (interpret-func func args)
+(define (interpret-func func-hash func args)
   (debug-display (~a "func: " (function-name func)))
   (define local-var-hash (make-zhash MAXVAR))
   (define (var-write! var-name v) (zhash-set! local-var-hash var-name v))
@@ -54,17 +50,17 @@
       (var-write! var-name arg-value)
     )
   )
-  (interpret-block bb-hash local-var-hash last-bb entry-bb)
+  (interpret-block func-hash bb-hash local-var-hash last-bb entry-bb)
 )
 
-(define (interpret-block basicblock-hash local-var-hash last-bb bb)
+(define (interpret-block func-hash bb-hash local-var-hash last-bb bb)
   (debug-display (~a "block: " (basicblock-name bb)))
   (define (var-write! var-name v) (zhash-set! local-var-hash var-name v))
   (define ret-value void)
   (for
     ([inst (basicblock-instructions bb)])
     (define inst-name (value-name inst))
-    (define inst-value (interpret-inst basicblock-hash local-var-hash last-bb bb inst))
+    (define inst-value (interpret-inst func-hash bb-hash local-var-hash last-bb bb inst))
     (when (not (equal? inst-name ""))
       (var-write! inst-name inst-value)
     )
@@ -73,7 +69,7 @@
   ret-value
 )
 
-(define (interpret-inst basicblock-hash local-var-hash last-bb bb inst)
+(define (interpret-inst func-hash bb-hash local-var-hash last-bb bb inst)
   (define op (instruction-opcode inst))
   (debug-display (~a "inst: " op))
   (define (var-read var-name) (zhash-ref local-var-hash var-name))
@@ -97,8 +93,6 @@
   (define (rrr f)
     (define a (list-ref operands 0))
     (define b (list-ref operands 1))
-    (debug-display a)
-    (debug-display b)
     (define value (compute f (opd-get a) (opd-get b)))
     value
   )
@@ -113,22 +107,27 @@
   )
 
   (define (call)
-    (define func-name (list-ref operands 0))
+    (define func-pointer (last operands))
+    (define func-name (value-name func-pointer))
+    (define-symbolic* x default-bitvector)
     (define assign-value null)
-    (define operand-values (map opd-get (rest operands)))
-    (if (internal-func? func-name)
-      (interpret-func func-name operand-values)
-      (interpret-intrisinc-func func-name operand-values)
+    (define operand-values (map opd-get (drop-right operands 1)))
+    ; Hacking symboblic function name.
+    (if (string-contains? func-name "symbolicI")
+        x
+        (if (zhash-has-key? func-hash func-name)
+            (interpret-func func-hash (zhash-ref func-hash func-name) operand-values)
+            (interpret-intrisinc-func func-name operand-values))
     )
   )
 
   (define (br)
     (define (branch dest-bb-name)
       (interpret-block
-        basicblock-hash
+        bb-hash
         local-var-hash
         bb
-        (zhash-ref basicblock-hash dest-bb-name)
+        (zhash-ref bb-hash dest-bb-name)
       )
     )
     (define a (list-ref operands 0))

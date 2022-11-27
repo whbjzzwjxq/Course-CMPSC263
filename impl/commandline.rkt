@@ -5,7 +5,7 @@
 (provide (all-defined-out))
 
 (define-global:string *input*
-  "./examples/example0.json"
+  "outputs/example-basic-functioncall.json"
   "Input LLVM IR file"
 )
 

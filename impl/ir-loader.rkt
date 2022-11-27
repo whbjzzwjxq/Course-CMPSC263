@@ -49,9 +49,10 @@
   (define global? (hash-ref opd-jsexpr `is_global #f))
 
   (define constant? (equal? name-str ""))
+  (define symbolic? (equal? value-str ""))
   (define datatype (str2datatype type-str))
   (define var-name (if constant? value-str name-str))
-  (operand var-name datatype constant? global?)
+  (operand var-name datatype constant? global? symbolic?)
 )
 
 (define (resolve-inst inst-jsexpr)
