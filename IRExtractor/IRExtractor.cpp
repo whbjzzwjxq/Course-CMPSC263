@@ -77,7 +77,7 @@ struct IRExtractor : public FunctionPass {
 
     json::Object val2json(Value *opd) {
         json::Object obj;
-        obj["var_name"] = opd->getName().str();
+        obj["name"] = opd->getName().str();
         obj["type"] = type2str(opd->getType());
         obj["value"] = printValue(opd);
         return obj;
@@ -94,25 +94,18 @@ struct IRExtractor : public FunctionPass {
         return obj;
     };
 
-    json::Object alloca2json(AllocaInst &inst) {
-        json::Object alloca_info;
-        alloca_info["align"] = inst.getAlignment();
-        alloca_info["allocated_type"] = type2str(inst.getAllocatedType());
-        alloca_info["array_size"] = printValue(inst.getArraySize());
-        return alloca_info;
-    }
-
     json::Object inst2json(Instruction &inst) {
         json::Object inst_info;
-        inst_info["assign"] = inst.getName().str();
-        inst_info["assign_type"] = type2str(inst.getType());
+        inst_info["name"] = inst.getName().str();
+        inst_info["type"] = type2str(inst.getType());
         inst_info["opcode"] = inst.getOpcodeName();
         inst_info["operands"] = {};
         if (llvm::CmpInst *cmpInst = dyn_cast<llvm::CmpInst>(&inst)) {
             inst_info["predicate"] = cmpInst->getPredicateName(cmpInst->getPredicate());
         }
         if (llvm::AllocaInst *allocaInst = dyn_cast<llvm::AllocaInst>(&inst)) {
-            inst_info["alloca"] = obj2value(alloca2json(*allocaInst));
+            inst_info["alloca_size"] = printValue(allocaInst->getArraySize());
+            inst_info["alloca_type"] = type2str(allocaInst->getAllocatedType());
         }
 
         for (auto &i : inst.operands()) {

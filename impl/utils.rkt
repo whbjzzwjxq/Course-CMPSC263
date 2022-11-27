@@ -1,6 +1,25 @@
 #lang rosette/safe
 
-(provide (all-defined-out))
+(require
+    "zhash/zhash.rkt"
+    "commandline.rkt"
+)
+
+(provide
+    (all-defined-out)
+    zvoid
+    zvoid?
+    zhash
+    make-zhash
+    zhash-keys
+    zhash-vals
+    zhash-val-set!
+    zhash-key-exists?
+    zhash-has-key?
+    zhash-secure-key!
+    zhash-ref
+    zhash-set!
+)
 
 (define BITWIDTH 64)
 (define POINTERWIDTH 64)
@@ -12,7 +31,6 @@
 
 (define MAXI32 (sub1 2e31))
 (define MINI32 (- 2e31))
-
 
 (define (zip a b) (map cons a b))
 
@@ -27,3 +45,7 @@
 (define (pointer-init) (bv 0 POINTERWIDTH))
 
 (define default-bitvector (bitvector BITWIDTH))
+
+(define (debug-display s) (when (*debug*) (display (format "~a \n" s))))
+
+(define (bvne a b) (not (bveq a b)))

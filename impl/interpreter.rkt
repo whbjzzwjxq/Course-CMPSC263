@@ -1,375 +1,326 @@
-#lang rosette/safe
+#lang rosette
 
 (require
-  racket/struct
   "utils.rkt"
-  "hash-vector.rkt"
   "structs.rkt"
 )
 
 (provide (all-defined-out))
 
+(define (interpret program)
+  (define global-hash (program-global-hash program))
+  (define func-hash (program-function-hash program))
+  (define main-func (zhash-ref func-hash "main"))
 
-(struct
-  frame (vars func-name allocas ret-value)
-  #:mutable
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) "frame")
-      (lambda (obj) (list
-        (frame-vars obj)
-        (frame-func-name obj)
-        (frame-allocas obj)
-        (frame-ret-value obj)
-      ))
-    ))
-  ]
-)
-
-(define (frame-init func-name)
-  (frame
-    (hash-vector-init MAXVAR null)
-    func-name
-    null
-    void
-  )
-)
-
-(define (interpret program init-state)
-  (define global-state (mstate-copy init-state))
-  (define global-var-hv (mstate-vars global-state))
-  (define (gvar-read var-name) (hash-vector-ref global-var-hv var-name))
-  (define (gvar-write! var-name v) (hash-vector-set! global-var-hv var-name v))
-  (define (add-frame _frame) (set-mstate-frames! global-state (cons _frame cur-frames)))
-
-  (define (internal-func? func-name)
-    (and
-        (hash-vector-contains? program func-name)
-        (> (hash-vector-length (function-block-hv (hash-vector-ref program func-name))) 0)
-    )
-  )
-
-  (define (interpret-ext-func func-name operands)
-
-    (define (llvm.wasm.memory.size.i32)
-      (bv 0 (bitvector (target-bitwidth)))
-    )
-
-    (define (llvm.assume)
-      void
-    )
-
-    (match func-name
-      ["llvm.wasm.memory.size.i32" (llvm.wasm.memory.size.i32)]
-      ["llvm.assume" (llvm.assume)]
-      [else (raise-user-error "Unknown function name: " func-name)]
-    )
-  )
-
-  (define (interpret-func func-name arg-values)
-    (debug-display (~a "func: " func-name))
-    (define cur-func (hash-vector-ref program func-name))
-    (define cur-frame (frame-init func-name))
-    (define local-var-hv (frame-vars cur-frame))
-    (define (var-read var-name) (hash-vector-ref local-var-hv var-name))
-    (define (var-write! var-name v) (hash-vector-set! local-var-hv var-name v))
-
-    (define bb-hv (function-block-hv cur-func))
-    (define defined-args (function-arguments cur-func))
-
-    (define (interpret-block bb-name last-bb-name)
-      (debug-display (~a "block: " bb-name))
-      (define cur-block (hash-vector-ref bb-hv bb-name))
-      (define (interpret-inst inst)
-        (define op (instruction-opcode inst))
-        (debug-display (~a "inst: " op))
-        (define operands (instruction-operands inst))
-        (define attributes (instruction-attributes inst))
-        (define assign (value-name inst))
-
-        (define (compute f reg-a reg-b) (f reg-a reg-b))
-
-        (define (opd-get opd)
-          (cond
-            [(bv? opd) opd]
-            [(variable? opd) (
-              if (global-variable? opd)
-                (gvar-read (value-name opd))
-                (var-read (value-name opd))
-            )]
-            [(string? opd) opd]
-            [(instruction? opd) (interpret-inst opd)]
-            [(array-offset? opd)
-              (array-offset
-                (opd-get (array-offset-index opd))
-                (opd-get (array-offset-size opd))
-              )
-            ]
-            [else opd]
-          )
-        )
-
-        (define (rrr f)
-          (define a (list-ref operands 0))
-          (define b (list-ref operands 1))
-          (define assign-value (compute f (opd-get a) (opd-get b)))
-          assign-value
-        )
-
-        ; Control flow
-
-        (define (ret)
-          (define assign-value void)
-          (when (not (empty? operands))
-            (set! assign-value (opd-get (first operands)))
-          )
-          (set-frame-ret-value! cur-frame assign-value)
-        )
-
-        (define (call)
-          (define func-name (list-ref operands 0))
-          (define assign-value null)
-          (define operand-values (map opd-get (rest operands)))
-          (if (internal-func? func-name)
-            (set! assign-value (interpret-func func-name operand-values))
-            (set! assign-value (interpret-ext-func func-name operand-values))
-          )
-          assign-value
-        )
-
-        (define (br)
-          (define (branch target-bb-name)
-            (interpret-block target-bb-name (value-name cur-block))
-          )
-          (define a (list-ref operands 0))
-          (if (equal? (length operands) 1)
-            (branch a)
-            (if (bitvector->bool (opd-get a))
-              (branch (list-ref operands 1))
-              (branch (list-ref operands 2))
-            )
-          )
-        )
-
-        (define (icmp)
-          ; Watchout order here. Reverse is right.
-          (define pred (list-ref operands 0))
-          (define a (list-ref operands 1))
-          (define b (list-ref operands 2))
-
-          (define f
-            (match pred
-              ['eq bveq]
-              ['ne bvne]
-              ['ugt bvugt]
-              ['uge bvuge]
-              ['ult bvult]
-              ['ule bvule]
-              ['sgt bvsgt]
-              ['sge bvsge]
-              ['slt bvslt]
-              ['sle bvsle]
-            )
-          )
-
-          (define value-a (ptrtoint (opd-get a) #f))
-          (define value-b (ptrtoint (opd-get b) #f))
-          (define assign-value (bool->bitvector (compute f value-a value-b)))
-          assign-value
-        )
-
-        (define (zext)
-          (define a (list-ref operands 0))
-          (define b (list-ref operands 1))
-          (define assign-value (zero-extend (opd-get a) b))
-          assign-value
-        )
-
-        (define (phi)
-          (define assign-value null)
-          ; see phi in make-instruction if confused.
-          (for
-            ([opd operands] #:when (equal? (cdr opd) last-bb-name))
-
-            (begin
-              (set! assign-value (opd-get (car opd)))
-            )
-          )
-          assign-value
-        )
-
-        (define (unreachable)
-          void
-        )
-
-        ; Memory
-
-        (define (getelementptr)
-          (define a (list-ref operands 0))
-          (define b (rest operands))
-
-          (define ptr (opd-get a))
-          (define offsets (map (lambda (opd) (count-offset (opd-get opd))) b))
-          (pointer (pointer-base ptr) (apply bvadd (cons (pointer-offset ptr) offsets)))
-        )
-
-        (define (load)
-          ; Always load as an integer, use inttoptr to convert to ptr if necessary.
-          (define a (list-ref operands 0))
-          (define type (list-ref operands 1))
-
-          (define ptr (opd-get a))
-          ; Hack but work
-          (define ptr? (case type [(pointer) #t] [else #f]))
-          (define bvsize
-            (cond
-              [ptr? (/ (target-pointer-bitwidth) 8)]
-              [else (/ (bitvector-size type) 8)]))
-
-          (define mblock (pointer-block cur-mregions ptr))
-          (define offset (pointer-offset ptr))
-          (define size (bvpointer bvsize))
-          (define path (mblock-path mblock offset size))
-          (define value (mblock-iload mblock path))
-
-          ; If the type of load is pointer, convert back using inttoptr.
-          (when ptr? (set! value (inttoptr value)))
-          value
-        )
-
-        (define (store)
-          ; Always store as integer, use ptrtoint to convert to int if necessary.
-          (define a (list-ref operands 0))
-          (define b (list-ref operands 1))
-          (define type (list-ref operands 2))
-
-          (define value (opd-get a))
-          (define ptr (opd-get b))
-
-          (if (global-variable? b)
-            (var-write! b value)
-            (begin
-              (set! value (ptrtoint value #f))
-              (set! type (type-of value))
-              (store-by-ptr ptr value type)
-            )
-          )
-        )
-
-        ; alloca allocates a stack pointer; mblock is uninitialized.
-        (define (alloca)
-          (define block (list-ref operands 0))
-          (set-frame-allocas! cur-frame (cons block (frame-allocas cur-frame)))
-          (pointer block (core:bvpointer 0))
-        )
-
-        (define (inttoptr [addr (list-ref operands 0)])
-          (set! addr (sign-extend addr (bitvector (target-pointer-bitwidth))))
-          (define mr
-            (core:guess-mregion-from-addr cur-mregions addr (bv 0 (type-of addr)))
-          )
-          ; Check in-bounds. Use size of 1 for sanity. (Real size will be actually checked upon access.)
-          (core:bug-on (! (core:mregion-inbounds? mr addr (bv 1 (type-of addr)))))
-
-          (pointer (core:mregion-name mr) (bvsub addr (bv (core:mregion-start mr) (type-of addr))))
-        )
-
-        (define (ptrtoint [ptr (list-ref operands 0)] [type (list-ref operands 1)])
-          (cond
-            [(nullptr? ptr) (nullptrtoint)]
-            [(pointer? ptr) (let* (
-              [mr (core:find-mregion-by-name cur-mregions (pointer-base ptr))]
-              [start (core:bvpointer (core:mregion-start mr))]
-            )
-              (bvadd start (pointer-offset ptr))
-            )]
-            [else ptr]
-          )
-        )
-
-        (define (memset ptr c size)
-          (define mblock (pointer-block cur-mregions ptr))
-          (define offset (pointer-offset ptr))
-          (mblock-memset! mblock (extract 7 0 c) offset size)
-          ptr
-        )
-
-        ; Just write self in assignment.
-        (define (bitcast)
-          (define a (list-ref operands 0))
-          (define assign-value (opd-get a))
-          assign-value
-        )
-
-        (match op
-          [`nop (void)]
-          [`add (rrr bvadd)]
-          [`sub (rrr bvsub)]
-
-          [`mul (rrr bvmul)]
-          [`sdiv (rrr bvsdiv)]
-          [`udiv (rrr bvudiv)]
-
-          [`and (rrr bvand)]
-          [`or  (rrr bvor)]
-          [`xor (rrr bvxor)]
-
-          [`lshr (rrr bvlshr)]
-          [`ashr (rrr bvashr)]
-          [`shl (rrr bvshl)]
-
-          [`bitcast (bitcast)]
-          [`zext (zext)]
-
-          [`ret (ret)]
-          [`call (call)]
-          [`br (br)]
-          [`icmp (icmp)]
-          [`phi (phi)]
-          [`unreachable (unreachable)]
-
-          [`alloca (alloca)]
-          [`load (load)]
-          [`store (store)]
-          [`inttoptr (inttoptr)]
-          [`getelementptr (getelementptr)]
-
-          [else (error "Simulator: undefine instruction " op)]
-        )
-      )
-      (for
-        ([cur-inst (basic-block-instructions cur-block)])
-        (define assign (value-name cur-inst))
-        (define assign-value (interpret-inst cur-inst))
-        (when (not (equal? assign void))
-          (var-write! (value-name assign) assign-value)
-        )
-      )
-    )
-
-    (begin
-      ; Binding arguments to local variables.
-      (for
-        ([arg-pair (zip arg-values defined-args)])
-        (let*
-          (
-            [arg-value (car arg-pair)]
-            [arg-opd (cdr arg-pair)]
-            [var-name (value-name arg-opd)]
-          )
-          (var-write! var-name arg-value)
-        )
-      )
-      (add-frame cur-frame)
-      (interpret-block "entry" "")
-      (frame-ret-value cur-frame)
-    )
-  )
-
-  (define ret (interpret-func "main" '()))
+  (define ret (interpret-func main-func (list)))
   (if (equal? ret void)
     (debug-display "Program returns void.")
     (bitvector->integer ret)
+  )
+)
+
+(define (internal-func? func-hash func-name)
+  (zhash-has-key? func-hash func-name)
+)
+
+(define (interpret-intrisinc-func func-name operands)
+  (define (llvm.assume) void)
+
+  (match func-name
+    ["llvm.assume" (llvm.assume)]
+    [else (raise-user-error "Unknown function name: " func-name)]
+  )
+)
+
+(define (interpret-func func args)
+  (debug-display (~a "func: " (function-name func)))
+  (define local-var-hash (make-zhash MAXVAR))
+  (define (var-write! var-name v) (zhash-set! local-var-hash var-name v))
+
+  (define bb-hash (function-block-hash func))
+  (define params (function-arguments func))
+  (define entry-bb (zhash-ref bb-hash "entry"))
+  (define last-bb null)
+
+  ; Binding arguments to local variables.
+  (for
+    ([arg-pair (zip args params)])
+    (let*
+      (
+        [arg-value (car arg-pair)]
+        [param (cdr arg-pair)]
+        [var-name (value-name param)]
+      )
+      (var-write! var-name arg-value)
+    )
+  )
+  (interpret-block bb-hash local-var-hash last-bb entry-bb)
+)
+
+(define (interpret-block basicblock-hash local-var-hash last-bb bb)
+  (debug-display (~a "block: " (basicblock-name bb)))
+  (define (var-write! var-name v) (zhash-set! local-var-hash var-name v))
+  (define ret-value void)
+  (for
+    ([inst (basicblock-instructions bb)])
+    (define inst-name (value-name inst))
+    (define inst-value (interpret-inst basicblock-hash local-var-hash last-bb bb inst))
+    (when (not (equal? inst-name ""))
+      (var-write! inst-name inst-value)
+    )
+    (set! ret-value inst-value)
+  )
+  ret-value
+)
+
+(define (interpret-inst basicblock-hash local-var-hash last-bb bb inst)
+  (define op (instruction-opcode inst))
+  (debug-display (~a "inst: " op))
+  (define (var-read var-name) (zhash-ref local-var-hash var-name))
+  (define (var-write! var-name v) (zhash-set! local-var-hash var-name v))
+  (define operands (instruction-operands inst))
+  (define predicate (instruction-predicate inst))
+  (define alloca-size (instruction-alloca-size inst))
+  (define alloca-type (instruction-alloca-type inst))
+
+  (define (opd-get opd)
+    (cond
+      [(constant-operand? opd) (bv (string->number (value-name opd)) default-bitvector)]
+      [(operand? opd) (var-read (value-name opd))]
+      [(instruction? opd) (interpret-inst opd)]
+      [else opd]
+    )
+  )
+
+  (define (compute f reg-a reg-b) (f reg-a reg-b))
+
+  (define (rrr f)
+    (define a (list-ref operands 0))
+    (define b (list-ref operands 1))
+    (debug-display a)
+    (debug-display b)
+    (define value (compute f (opd-get a) (opd-get b)))
+    value
+  )
+  ; Control flow
+
+  (define (ret)
+    (define ret-value void)
+    (when (not (empty? operands))
+      (set! ret-value (opd-get (first operands)))
+    )
+    ret-value
+  )
+
+  (define (call)
+    (define func-name (list-ref operands 0))
+    (define assign-value null)
+    (define operand-values (map opd-get (rest operands)))
+    (if (internal-func? func-name)
+      (interpret-func func-name operand-values)
+      (interpret-intrisinc-func func-name operand-values)
+    )
+  )
+
+  (define (br)
+    (define (branch dest-bb-name)
+      (interpret-block
+        basicblock-hash
+        local-var-hash
+        bb
+        (zhash-ref basicblock-hash dest-bb-name)
+      )
+    )
+    (define a (list-ref operands 0))
+    (if (equal? (length operands) 1)
+      (branch a)
+      (if (bitvector->bool (opd-get a))
+        (branch (list-ref operands 1))
+        (branch (list-ref operands 2))
+      )
+    )
+  )
+
+  (define (icmp)
+    (define pred (list-ref operands 0))
+    (define a (list-ref operands 1))
+    (define b (list-ref operands 2))
+
+    (define f
+      (match pred
+        ["eq" bveq]
+        ["ne" bvne]
+        ["ugt" bvugt]
+        ["uge" bvuge]
+        ["ult" bvult]
+        ["ule" bvule]
+        ["sgt" bvsgt]
+        ["sge" bvsge]
+        ["slt" bvslt]
+        ["sle" bvsle]
+      )
+    )
+
+    (define value-a (opd-get a))
+    (define value-b (opd-get b))
+    (define inst-value (bool->bitvector (compute f value-a value-b)))
+    inst-value
+  )
+
+  ; Just write self in assignment.
+  (define (bitcast)
+    (define a (list-ref operands 0))
+    (define assign-value (opd-get a))
+    assign-value
+  )
+
+  (define (zext)
+    (define a (list-ref operands 0))
+    (define b (list-ref operands 1))
+    (define assign-value (zero-extend (opd-get a) b))
+    assign-value
+  )
+
+  (define (phi)
+    (define assign-value null)
+    (for
+      ([opd operands] #:when (equal? (cdr opd) (basicblock-name last-bb)))
+
+      (begin
+        (set! assign-value (opd-get (car opd)))
+      )
+    )
+    assign-value
+  )
+
+  (define (unreachable)
+    void
+  )
+
+  ; Memory
+
+  ; (define (getelementptr)
+  ;   (define a (list-ref operands 0))
+  ;   (define b (rest operands))
+
+  ;   (define ptr (opd-get a))
+  ;   (define offsets (map (lambda (opd) (count-offset (opd-get opd))) b))
+  ;   (pointer (pointer-base ptr) (apply bvadd (cons (pointer-offset ptr) offsets)))
+  ; )
+
+  ; (define (load)
+  ;   ; Always load as an integer, use inttoptr to convert to ptr if necessary.
+  ;   (define a (list-ref operands 0))
+  ;   (define type (list-ref operands 1))
+
+  ;   (define ptr (opd-get a))
+  ;   ; Hack but work
+  ;   (define ptr? (case type [(pointer) #t] [else #f]))
+  ;   (define bvsize
+  ;     (cond
+  ;       [ptr? (/ (target-pointer-bitwidth) 8)]
+  ;       [else (/ (bitvector-size type) 8)]))
+
+  ;   (define mblock (pointer-block cur-mregions ptr))
+  ;   (define offset (pointer-offset ptr))
+  ;   (define size (bvpointer bvsize))
+  ;   (define path (mblock-path mblock offset size))
+  ;   (define value (mblock-iload mblock path))
+
+  ;   ; If the type of load is pointer, convert back using inttoptr.
+  ;   (when ptr? (set! value (inttoptr value)))
+  ;   value
+  ; )
+
+  ; (define (store)
+  ;   ; Always store as integer, use ptrtoint to convert to int if necessary.
+  ;   (define a (list-ref operands 0))
+  ;   (define b (list-ref operands 1))
+  ;   (define type (list-ref operands 2))
+
+  ;   (define value (opd-get a))
+  ;   (define ptr (opd-get b))
+
+  ;   (if (global-variable? b)
+  ;     (var-write! b value)
+  ;     (begin
+  ;       (set! value (ptrtoint value #f))
+  ;       (set! type (type-of value))
+  ;       (store-by-ptr ptr value type)
+  ;     )
+  ;   )
+  ; )
+
+  ; ; alloca allocates a stack pointer; mblock is uninitialized.
+  ; (define (alloca)
+  ;   (define block (list-ref operands 0))
+  ;   (set-frame-allocas! cur-frame (cons block (frame-allocas cur-frame)))
+  ;   (pointer block (core:bvpointer 0))
+  ; )
+
+  ; (define (inttoptr [addr (list-ref operands 0)])
+  ;   (set! addr (sign-extend addr (bitvector (target-pointer-bitwidth))))
+  ;   (define mr
+  ;     (core:guess-mregion-from-addr cur-mregions addr (bv 0 (type-of addr)))
+  ;   )
+  ;   ; Check in-bounds. Use size of 1 for sanity. (Real size will be actually checked upon access.)
+  ;   (core:bug-on (! (core:mregion-inbounds? mr addr (bv 1 (type-of addr)))))
+
+  ;   (pointer (core:mregion-name mr) (bvsub addr (bv (core:mregion-start mr) (type-of addr))))
+  ; )
+
+  ; (define (ptrtoint [ptr (list-ref operands 0)] [type (list-ref operands 1)])
+  ;   (cond
+  ;     [(nullptr? ptr) (nullptrtoint)]
+  ;     [(pointer? ptr) (let* (
+  ;       [mr (core:find-mregion-by-name cur-mregions (pointer-base ptr))]
+  ;       [start (core:bvpointer (core:mregion-start mr))]
+  ;     )
+  ;       (bvadd start (pointer-offset ptr))
+  ;     )]
+  ;     [else ptr]
+  ;   )
+  ; )
+
+  ; (define (memset ptr c size)
+  ;   (define mblock (pointer-block cur-mregions ptr))
+  ;   (define offset (pointer-offset ptr))
+  ;   (mblock-memset! mblock (extract 7 0 c) offset size)
+  ;   ptr
+  ; )
+  (match op
+    ["nop" (void)]
+    ["add" (rrr bvadd)]
+    ["sub" (rrr bvsub)]
+
+    ["mul" (rrr bvmul)]
+    ["sdiv" (rrr bvsdiv)]
+    ["udiv" (rrr bvudiv)]
+
+    ["and" (rrr bvand)]
+    ["or"  (rrr bvor)]
+    ["xor" (rrr bvxor)]
+
+    ["lshr" (rrr bvlshr)]
+    ["ashr" (rrr bvashr)]
+    ["shl" (rrr bvshl)]
+
+    ["bitcast" (bitcast)]
+    ["zext" (zext)]
+
+    ["ret" (ret)]
+    ["call" (call)]
+    ["br" (br)]
+    ["icmp" (icmp)]
+    ["phi" (phi)]
+    ["unreachable" (unreachable)]
+
+    ; ["alloca" (alloca)]
+    ; ["load" (load)]
+    ; ["store" (store)]
+    ; ["inttoptr" (inttoptr)]
+    ; ["getelementptr" (getelementptr)]
+
+    [else (error "Interpreter error: Undefined instruction " op)]
   )
 )

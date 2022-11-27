@@ -1,48 +1,43 @@
-#lang racket/base
+#lang rosette/safe
 
 (require
   racket/struct
   racket/format
-  rosette/base/base
-  "hash-vector.rkt"
+  "datatype.rkt"
+  "utils.rkt"
 )
 
 (provide (all-defined-out))
 
-(define (print-type type)
-  (if (bitvector? type) (~a "i" (bitvector-size type)) type)
+(struct nullptr () #:transparent)
+
+(struct undef (type) #:transparent)
+
+(struct program (global-hash function-hash) #:transparent)
+
+(struct function (name arguments block-hash) #:transparent
+  #:methods gen:custom-write
+  [(define write-proc
+    (make-constructor-style-printer
+      (lambda (obj) (~a "Function " (function-name obj) " Arguments " (function-arguments obj)))
+      (lambda (obj) (zhash-vals (function-block-hash obj)))
+    ))
+  ]
 )
 
-(define (print-opd opd)
-  (~a (if (bv? opd) (bitvector->integer opd) opd))
+(struct basicblock (name instructions) #:transparent
+  #:methods gen:custom-write
+  [(define write-proc
+    (make-constructor-style-printer
+      (lambda (obj) (~a "Basicblock " (basicblock-name obj)))
+      (lambda (obj) (basicblock-instructions obj))
+    ))
+  ]
 )
-
-; LLVM
-(struct module (global-hv function-hv) #:transparent)
 
 (struct value (name type) #:transparent)
 
-(struct function value (arguments block-hv) #:transparent
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (~a "func " (value-name obj) " args " (function-arguments obj)))
-      (lambda (obj) (hash-vector-elements (function-block-hv obj)))
-    ))
-  ]
-)
-
-(struct basic-block value (instructions) #:transparent
-  #:methods gen:custom-write
-  [(define write-proc
-    (make-constructor-style-printer
-      (lambda (obj) (~a "basicblock " (value-name obj)))
-      (lambda (obj) (basic-block-instructions obj))
-    ))
-  ]
-)
-
-(struct instruction value (opcode operands attributes) #:transparent
+(struct instruction value (opcode operands predicate alloca-size alloca-type) #:transparent
   #:methods gen:custom-write
   [(define write-proc
     (make-constructor-style-printer
@@ -50,18 +45,22 @@
       (lambda (obj)
         (let*
           (
-            [assign (value-name obj)]
-            [assign-str (if (equal? assign void) "" (~a (value-name obj) " = "))]
+            [name (value-name obj)]
+            [assign-str (if (equal? name "") "" (~a (value-name obj) " = "))]
           )
           (list (~a
             assign-str
             (instruction-opcode obj)
             " "
-            (print-type (value-type obj))
+            (datatype-name (value-type obj))
             " "
-            (map print-opd (instruction-operands obj))
+            (instruction-operands obj)
             " "
-            (instruction-attributes obj)
+            (instruction-predicate obj)
+            " "
+            (instruction-alloca-size obj)
+            " "
+            (instruction-alloca-type obj)
           ))
         )
       )
@@ -69,40 +68,34 @@
   ]
 )
 
-(struct array-offset (index size) #:transparent)
-
-(struct struct-offset (value) #:transparent)
-
-(struct asm (template constraint) #:transparent)
-
-(struct nullptr () #:transparent)
-
-(struct undef (type) #:transparent)
-
-(struct variable value (global)
+(struct operand value (constant global)
   #:transparent
   #:methods gen:custom-write
   [(define write-proc
     (make-constructor-style-printer
-      (lambda (obj) "var")
+      (lambda (obj) "operand")
       (lambda (obj)
-        (let*
-          ([vtype (value-type obj)])
-          (list (~a
-            (if (variable-global obj) "@" "%")
-            (value-name obj)
-            " "
-            (if (bitvector? vtype) (~a "i" (bitvector-size vtype)) vtype)
-          ))
-        )
+        (list (~a
+          (datatype-name (value-type obj))
+          " "
+          (if (operand-constant obj) "" (if (operand-global obj) "@" "%"))
+          (value-name obj)
+        ))
       )
     ))
   ]
 )
 
-(define (global-variable? v)
-  (and
-    (variable? v)
-    (variable-global v)
+(define (constant-operand? v)
+  (&&
+    (operand? v)
+    (operand-constant v)
+  )
+)
+
+(define (global-operand? v)
+  (&&
+    (operand? v)
+    (operand-global v)
   )
 )

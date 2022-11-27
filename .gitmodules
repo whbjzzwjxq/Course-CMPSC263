@@ -1,0 +1,3 @@
+[submodule "zhash"]
+	path = impl/zhash
+	url = git@github.com:chyanju/zhash.git

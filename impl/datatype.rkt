@@ -24,11 +24,13 @@
 (define i16 (llvm-integer "i16" 16))
 (define i32 (llvm-integer "i32" 32))
 (define i64 (llvm-integer "i64" 64))
-(define i128 (llvm-integer "i128" 128))
 
-(define llvm-label (datatype "label" 0))
-(define llvm-struct (datatype "struct" 0))
-(define llvm-function (datatype "function" 0))
+(struct llvm-label datatype ())
+
+(define llvm-basicblock (llvm-label "basicblock" 0))
+(define llvm-struct (llvm-label "struct" 0))
+(define llvm-function (llvm-label "function" 0))
+
 (define llvm-void (datatype "void" 0))
 
 (struct llvm-array datatype (dim element-type)
