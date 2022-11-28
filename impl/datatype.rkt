@@ -3,7 +3,7 @@
 (require
   racket/struct
   "utils.rkt"
-  )
+)
 
 (provide (all-defined-out))
 
@@ -15,7 +15,16 @@
       (lambda (obj) "")
       ))
    ]
-  )
+)
+
+(define (datatype->bitvector ty)
+  (bitvector (datatype-size ty))
+)
+
+(define (datatype->symbolic ty)
+  (define-symbolic* x (bitvector (datatype-size ty)))
+  x
+)
 
 (struct llvm-integer datatype ())
 

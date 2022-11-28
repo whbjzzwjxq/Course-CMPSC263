@@ -3,6 +3,7 @@
 (require
   "utils.rkt"
   "structs.rkt"
+  "datatype.rkt"
 )
 
 (provide (all-defined-out))
@@ -81,7 +82,7 @@
 
   (define (opd-get opd)
     (cond
-      [(constant-operand? opd) (bv (string->number (value-name opd)) default-bitvector)]
+      [(constant-operand? opd) (constant->bv opd)]
       [(operand? opd) (var-read (value-name opd))]
       [(instruction? opd) (interpret-inst opd)]
       [else opd]
@@ -109,12 +110,11 @@
   (define (call)
     (define func-pointer (last operands))
     (define func-name (value-name func-pointer))
-    (define-symbolic* x default-bitvector)
     (define assign-value null)
     (define operand-values (map opd-get (drop-right operands 1)))
     ; Hacking symboblic function name.
     (if (string-contains? func-name "symbolicI")
-        x
+        (datatype->symbolic (function-ret-type (zhash-ref func-hash func-name)))
         (if (zhash-has-key? func-hash func-name)
             (interpret-func func-hash (zhash-ref func-hash func-name) operand-values)
             (interpret-intrisinc-func func-name operand-values))

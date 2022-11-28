@@ -3,6 +3,7 @@
 (require
   racket/struct
   racket/format
+  racket/base
   "datatype.rkt"
   "utils.rkt"
 )
@@ -15,11 +16,16 @@
 
 (struct program (global-hash function-hash) #:transparent)
 
-(struct function (name arguments block-hash) #:transparent
+(struct function (name ret-type arguments block-hash) #:transparent
   #:methods gen:custom-write
   [(define write-proc
     (make-constructor-style-printer
-      (lambda (obj) (~a "Function " (function-name obj) " Arguments " (function-arguments obj)))
+      (lambda (obj) (~a
+        "Function " (function-name obj)
+        " "
+        "Return Type " (function-ret-type obj)
+        " "
+        "Arguments " (function-arguments obj)))
       (lambda (obj) (zhash-vals (function-block-hash obj)))
     ))
   ]
@@ -105,4 +111,10 @@
     (operand? v)
     (operand-symbolic v)
   )
+)
+
+(define (constant->bv value)
+  (define number (string->number (value-name value)))
+  (define bitvector (datatype->bitvector (value-type value)))
+  (bv number bitvector)
 )
