@@ -14,10 +14,7 @@
   (define main-func (zhash-ref func-hash "main"))
 
   (define ret (interpret-func func-hash main-func (list)))
-  (if (equal? ret void)
-    (debug-display "Program returns void.")
-    (bitvector->integer ret)
-  )
+  ret
 )
 
 (define (interpret-intrisinc-func func-name operands)
@@ -122,13 +119,9 @@
   )
 
   (define (br)
-    (define (branch dest-bb-name)
-      (interpret-block
-        bb-hash
-        local-var-hash
-        bb
-        (zhash-ref bb-hash dest-bb-name)
-      )
+    (define (branch dest-bb-opd)
+      (define dest-bb (zhash-ref bb-hash (value-name dest-bb-opd)))
+      (interpret-block func-hash bb-hash local-var-hash bb dest-bb)
     )
     (define a (list-ref operands 0))
     (if (equal? (length operands) 1)
@@ -141,9 +134,9 @@
   )
 
   (define (icmp)
-    (define pred (list-ref operands 0))
-    (define a (list-ref operands 1))
-    (define b (list-ref operands 2))
+    (define pred (instruction-predicate inst))
+    (define a (list-ref operands 0))
+    (define b (list-ref operands 1))
 
     (define f
       (match pred
@@ -160,10 +153,9 @@
       )
     )
 
-    (define value-a (opd-get a))
-    (define value-b (opd-get b))
-    (define inst-value (bool->bitvector (compute f value-a value-b)))
-    inst-value
+    (define bool-value (compute f (opd-get a) (opd-get b)))
+    (define value (bool->bitvector bool-value))
+    value
   )
 
   ; Just write self in assignment.
@@ -183,10 +175,11 @@
   (define (phi)
     (define assign-value null)
     (for
-      ([opd operands] #:when (equal? (cdr opd) (basicblock-name last-bb)))
+      ([opd operands] #:when (equal? (operand-prev-block opd) (basicblock-name last-bb)))
 
       (begin
-        (set! assign-value (opd-get (car opd)))
+        (debug-display (format "Phi select: ~a" (operand-prev-block opd)))
+        (set! assign-value (opd-get opd))
       )
     )
     assign-value

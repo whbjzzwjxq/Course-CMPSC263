@@ -79,7 +79,11 @@ struct IRExtractor : public FunctionPass {
         json::Object obj;
         obj["name"] = opd->getName().str();
         obj["type"] = type2str(opd->getType());
-        obj["value"] = printValue(opd);
+        auto value = printValue(opd);
+        if (value.rfind("%", 0) == 0 || value.rfind("@", 0) == 0) {
+            value = value.replace(0, 1, "");
+        }
+        obj["value"] = value;
         return obj;
     };
 
@@ -88,7 +92,7 @@ struct IRExtractor : public FunctionPass {
         if (llvm::isa<PHINode>(inst)) {
             if (llvm::PHINode *phiInst = dyn_cast<llvm::PHINode>(&inst)) {
                 llvm::BasicBlock *bb = phiInst->getIncomingBlock(*opd);
-                obj["pred_block"] = bb->getName().str();
+                obj["prev_block"] = bb->getName().str();
             };
         }
         return obj;

@@ -74,7 +74,7 @@
   ]
 )
 
-(struct operand value (constant global symbolic)
+(struct operand value (constant global symbolic prev-block)
   #:transparent
   #:methods gen:custom-write
   [(define write-proc

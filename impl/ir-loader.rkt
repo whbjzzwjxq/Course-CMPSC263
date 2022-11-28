@@ -47,12 +47,13 @@
   (define type-str (hash-ref opd-jsexpr `type))
   (define value-str (hash-ref opd-jsexpr `value))
   (define global? (hash-ref opd-jsexpr `is_global #f))
+  (define prev-block (hash-ref opd-jsexpr `prev_block ""))
 
   (define constant? (equal? name-str ""))
   (define symbolic? (equal? value-str ""))
   (define datatype (string->datatype type-str))
   (define var-name (if constant? value-str name-str))
-  (operand var-name datatype constant? global? symbolic?)
+  (operand var-name datatype constant? global? symbolic? prev-block)
 )
 
 (define (resolve-inst inst-jsexpr)
