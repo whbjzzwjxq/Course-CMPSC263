@@ -34,7 +34,4 @@
 # Mac FS
 .DS_Store
 
-# Output
-outputs
-
 .vscode

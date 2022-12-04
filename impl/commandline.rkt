@@ -5,12 +5,12 @@
 (provide (all-defined-out))
 
 (define-global:string *input*
-  "outputs/example-opt-pathmerge.json"
-  "Input LLVM IR file"
+  "outputs/example-opt-rewrite2.json"
+  "Input LLVM IR extracted JSON file"
 )
 
 (define-global:boolean *debug*
-  #t
+  #f
   "Debug mode"
 )
 
@@ -24,4 +24,4 @@
   "Optimize the whole program"
 )
 
-(void (globals->command-line #:program "LLVM interpreter and optimizer based on rosette."))
+(void (globals->command-line #:program "LLVM interpreter and optimizer based on rosette"))

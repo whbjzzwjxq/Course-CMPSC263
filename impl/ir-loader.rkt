@@ -1,7 +1,6 @@
 #lang racket
 
 (require
-  dyoo-while-loop
   json
   "datatype.rkt"
   "utils.rkt"
@@ -116,21 +115,9 @@
   )
 )
 
-; list jsexpr
 (define (load-json-lines file)
-  (define f (open-input-file file #:mode 'text))
-  (define lines (list))
-  (begin
-    (while #t
-      (define line (read-line f))
-      (if (eof-object? line)
-        (break)
-        (set! lines (append lines (list (string->jsexpr line))))
-      )
-    )
-    (close-input-port f)
-    lines
-  )
+  (define lines (file->lines file))
+  (map string->jsexpr lines)
 )
 
 (define (load-program input-file-path)
