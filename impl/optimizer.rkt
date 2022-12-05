@@ -109,18 +109,20 @@
 (define (gen-optimize sym-quote)
     (define rg (make-regraph (list sym-quote) #:limit 10000))
     (define (loop i)
-        (when (< i 50)
+        (when (< i 10)
             (begin
                 ((rule-phase ipats opats) rg)
                 ((precompute-phase constant-fold) rg)
                 (extractor-phase rg)
+                (debug-display (format "Step ~a Result: " i))
+                (debug-display (quote->symbolic (first (regraph-extract rg))))
                 (loop (add1 i))
             )
         )
     )
     (loop 0)
     (define ret (first (regraph-extract rg)))
-    ret
+    (quote->symbolic ret)
 )
 
 
@@ -129,9 +131,13 @@
         (for/all ([symbolic-expr symbolic-ret #:exhaustive])
             (define cond (car symbolic-expr))
             (define expr (cdr symbolic-expr))
-            (quote->symbolic (gen-optimize (symbolic->quote expr)))
+            (gen-optimize (symbolic->quote expr))
         )
-        (quote->symbolic (gen-optimize (symbolic->quote symbolic-ret)))
+        (gen-optimize (symbolic->quote symbolic-ret))
     ))
-    ret
+    (define sat (solve (assert (equal? symbolic-ret ret))))
+    (if (sat? sat)
+        ret
+        symbolic-ret
+    )
 )

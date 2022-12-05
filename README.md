@@ -18,13 +18,13 @@ An Interpreter/Optimizer for LLVM IR based on Racket/Rosette
 
 Install Rosette: raco pkg install rosette
 Install Regraph: raco pkg install regraph
-Install Global: raco pkd install global
+Install Global: raco pkg install global
 zhash is provided by git submodule
 
 ```bash
 raco pkg install rosette
 raco pkg install regraph
-raco pkd install global
+raco pkg install global
 git clone --recurse-submodules this-repo
 ```
 
@@ -41,6 +41,13 @@ Interpreter returns
     (ite (bvsle x$0 (bv #x00000080 32))
         (bv #x00000000 32)
         (bvadd (bvmul x$1 x$1) (bvadd (bvmul x$0 x$0) (bvmul x$0 (bvmul (bv #x00000002 32) x$1)))))
+Step 0 Result:
+    (ite (bvsle x$0 (bv #x00000080 32))
+        (bv #x00000000 32)
+        (bvadd (bvsqr x$1) (bvadd (bvsqr x$0) (bvmul x$0 (bvmul 2 x$1)))))
+Step 1 Result:
+...
+...
 Optimizer returns
     (ite (bvsle x$0 (bv #x00000080 32))
         (bv #x00000000 32)
@@ -56,6 +63,8 @@ to
 ```
 
 `ite` is the intrinsic representation of `if` in the rosette.
+
+Step n result here means intermediate optimization result.
 
 ## Optimization
 1. Path merge.

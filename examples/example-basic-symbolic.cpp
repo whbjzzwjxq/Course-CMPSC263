@@ -2,7 +2,11 @@ int symbolicI32() { return 0; }
 
 int main() {
   int x = symbolicI32();
-  int y = x << 2;
-  int z = y + x;
-  return z;
+  if (x >= 128) {
+    int z = x + 256;
+    return z;
+  } else {
+    int y = x << 2;
+    return y;
+  }
 }

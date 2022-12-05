@@ -9,9 +9,20 @@ entry:
 define dso_local i32 @main() #1 {
 entry:
   %call = call i32 @_Z11symbolicI32v()
+  %cmp = icmp sge i32 %call, 128
+  br i1 %cmp, label %if.then, label %if.else
+
+if.then:                                          ; preds = %entry
+  %add = add nsw i32 %call, 256
+  br label %return
+
+if.else:                                          ; preds = %entry
   %shl = shl i32 %call, 2
-  %add = add nsw i32 %shl, %call
-  ret i32 %add
+  br label %return
+
+return:                                           ; preds = %if.else, %if.then
+  %retval.0 = phi i32 [ %add, %if.then ], [ %shl, %if.else ]
+  ret i32 %retval.0
 }
 
 attributes #0 = { mustprogress noinline nounwind uwtable "frame-pointer"="all" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
