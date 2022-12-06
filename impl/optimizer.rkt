@@ -79,7 +79,7 @@
         [(list op child1) (let*
             ([a (quote->symbolic child1)])
             (match op
-                [`bvsqr (bvadd a)]
+                [`bvsqr (bvsqr a)]
             )
         )]
         [(list op child1 child2) (let*
